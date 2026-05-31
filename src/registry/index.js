@@ -13,6 +13,9 @@ function discoverPackDirectories(root) {
 
 function walk(dir, result) {
   if (!fs.existsSync(dir)) return;
+  if (fs.existsSync(path.join(dir, "bundle.json"))) {
+    return;
+  }
   const manifestPath = path.join(dir, "skillpack.manifest.json");
   if (fs.existsSync(manifestPath)) {
     result.push(dir);

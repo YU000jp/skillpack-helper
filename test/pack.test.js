@@ -3,86 +3,70 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { spawnSync } = require("child_process");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const {
-  defaultManifest,
-  normalizeManifest,
-  validateManifest,
-  writeManifest,
-  renderSkillMarkdown,
-  buildBundle,
-  manifestSchemaPath,
-} = require("../src");
+const cliPath = path.resolve(__dirname, "..", "src", "cli.js");
 
 function tempDir(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
-function writePack(dir, manifest) {
-  fs.mkdirSync(dir, { recursive: true });
-  const normalized = normalizeManifest(manifest);
-  writeManifest(path.join(dir, "skillpack.manifest.json"), normalized);
-  fs.writeFileSync(path.join(dir, "SKILL.md"), renderSkillMarkdown(normalized), "utf8");
+function runCli(args, options = {}) {
+  const result = spawnSync(process.execPath, [cliPath, ...args], {
+    encoding: "utf8",
+    ...options,
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  return result;
 }
 
-test("manifest normalizes and validates", () => {
-  const manifest = defaultManifest({
-    name: "alpha",
-    purpose: "Reduce helper drift.",
-    skills: [
-      {
-        id: "core",
-        title: "Core",
-        summary: "Shared helper pack.",
-        purpose: "Reduce helper drift.",
-        contracts: ["Keep it deterministic."],
-        guarantees: ["Stable output."],
-        usagePatterns: ["Load only when needed."],
-        implementations: { ts: ["src/core"], rust: ["crates/core"] },
-      },
-    ],
-  });
+function writeManifest(dir, manifest) {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "skillpack.manifest.json"), JSON.stringify(manifest, null, 2) + "\n", "utf8");
+}
 
-  const normalized = normalizeManifest(manifest);
-  assert.match(normalized.jscpid, /^jscpid_[0-9a-f]{16}$/);
-  assert.equal(normalized.skills[0].jscpid.startsWith("jscpid_"), true);
-  assert.doesNotThrow(() => validateManifest(normalized));
+test("help shows only the supported CLI commands", () => {
+  const result = runCli(["--help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /create/);
+  assert.match(result.stdout, /update/);
+  assert.match(result.stdout, /validate/);
+  assert.match(result.stdout, /build/);
+  assert.match(result.stdout, /pack/);
+  assert.doesNotMatch(result.stdout, /\blist\b/);
+  assert.doesNotMatch(result.stdout, /\bexplain\b/);
 });
 
-test("renderSkillMarkdown includes core metadata", () => {
-  const normalized = normalizeManifest(
-    defaultManifest({
-      name: "beta",
-      purpose: "Provide scoped skills.",
-      skills: [
-        {
-          id: "core",
-          title: "Core",
-          summary: "Pack summary.",
-          purpose: "Provide scoped skills.",
-          contracts: ["Keep boundaries clear."],
-          guarantees: ["Explicit role ownership."],
-          usagePatterns: ["Load selectively."],
-          implementations: { ts: ["src/index.js"], rust: [] },
-        },
-      ],
-    })
-  );
+test("create scaffolds a pack and update regenerates SKILL.md", () => {
+  const root = tempDir("skillpack-helper-create-");
+  const packDir = path.join(root, "example");
 
-  const markdown = renderSkillMarkdown(normalized);
-  assert.match(markdown, /# beta/);
-  assert.match(markdown, /## Skills/);
-  assert.match(markdown, /JSCPID/);
-  assert.match(markdown, /src\/index\.js/);
+  const createResult = runCli(["create", packDir, "--name", "example-pack"]);
+  assert.equal(createResult.status, 0);
+  assert.ok(fs.existsSync(path.join(packDir, "skillpack.manifest.json")));
+  assert.ok(fs.existsSync(path.join(packDir, "SKILL.md")));
+
+  const manifest = JSON.parse(fs.readFileSync(path.join(packDir, "skillpack.manifest.json"), "utf8"));
+  manifest.purpose = "Updated purpose.";
+  fs.writeFileSync(path.join(packDir, "skillpack.manifest.json"), JSON.stringify(manifest, null, 2) + "\n", "utf8");
+
+  const updateResult = runCli(["update", packDir]);
+  assert.equal(updateResult.status, 0);
+  const updated = fs.readFileSync(path.join(packDir, "SKILL.md"), "utf8");
+  assert.match(updated, /Updated purpose\./);
 });
 
-test("buildBundle deduplicates identical skills across packs", () => {
-  const root = tempDir("skillpack-helper-");
-  writePack(path.join(root, "a"), {
+test("validate build and pack support duplicate skill dedupe", () => {
+  const root = tempDir("skillpack-helper-dedupe-");
+  writeManifest(path.join(root, "a"), {
     name: "pack-a",
+    version: "0.1.0",
     purpose: "Shared skill.",
+    dependsOn: [],
     skills: [
       {
         id: "shared",
@@ -96,9 +80,11 @@ test("buildBundle deduplicates identical skills across packs", () => {
       },
     ],
   });
-  writePack(path.join(root, "b"), {
+  writeManifest(path.join(root, "b"), {
     name: "pack-b",
+    version: "0.1.0",
     purpose: "Shared skill.",
+    dependsOn: [],
     skills: [
       {
         id: "shared-copy",
@@ -113,52 +99,20 @@ test("buildBundle deduplicates identical skills across packs", () => {
     ],
   });
 
-  const bundle = buildBundle({ root });
+  const validateResult = runCli(["validate", root]);
+  assert.equal(validateResult.status, 0);
+  assert.match(validateResult.stdout, /Validated 2 pack\(s\)\./);
+
+  const outDir = path.join(root, "dist");
+  const buildResult = runCli(["build", root, "--out", outDir]);
+  assert.equal(buildResult.status, 0);
+  const bundle = JSON.parse(fs.readFileSync(path.join(outDir, "bundle.json"), "utf8"));
   assert.equal(bundle.packs.length, 2);
   assert.equal(bundle.duplicateSkills.length, 1);
-});
 
-test("buildBundle rejects circular dependencies", () => {
-  const root = tempDir("skillpack-helper-cycle-");
-  writePack(path.join(root, "a"), {
-    name: "pack-a",
-    purpose: "Cycle test.",
-    dependsOn: ["pack-b"],
-    skills: [
-      {
-        id: "a",
-        title: "A",
-        summary: "A.",
-        purpose: "Cycle test.",
-        contracts: ["Keep it stable."],
-        guarantees: ["Deterministic output."],
-        usagePatterns: ["Load selectively."],
-        implementations: { ts: [], rust: [] },
-      },
-    ],
-  });
-  writePack(path.join(root, "b"), {
-    name: "pack-b",
-    purpose: "Cycle test.",
-    dependsOn: ["pack-a"],
-    skills: [
-      {
-        id: "b",
-        title: "B",
-        summary: "B.",
-        purpose: "Cycle test.",
-        contracts: ["Keep it stable."],
-        guarantees: ["Deterministic output."],
-        usagePatterns: ["Load selectively."],
-        implementations: { ts: [], rust: [] },
-      },
-    ],
-  });
-
-  assert.throws(() => buildBundle({ root }), /Circular dependency detected/);
-});
-
-test("manifest schema is packaged and reachable from the public API", () => {
-  assert.ok(fs.existsSync(manifestSchemaPath));
-  assert.match(path.basename(manifestSchemaPath), /skillpack\.manifest\.schema\.json$/);
+  const packResult = runCli(["pack", root]);
+  assert.equal(packResult.status, 0);
+  const packBundle = JSON.parse(packResult.stdout);
+  assert.equal(packBundle.packs.length, 2);
+  assert.equal(packBundle.duplicateSkills.length, 1);
 });

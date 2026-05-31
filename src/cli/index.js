@@ -74,19 +74,6 @@ async function validatePack(options) {
   console.log(`Validated ${packs.length} pack(s).`);
 }
 
-async function listPacks(options) {
-  const root = resolveRootDirectory(options);
-  const packs = discoverPackDirectories(root).map((dir) => loadPack(dir));
-  if (packs.length === 0) {
-    console.log("No skill packs found.");
-    return;
-  }
-
-  for (const pack of packs) {
-    console.log(`${pack.manifest.name}  ${pack.manifestPath}`);
-  }
-}
-
 async function buildOutput(options) {
   const root = resolveRootDirectory(options);
   const outDir = options.out || path.join(root, "dist");
@@ -113,30 +100,6 @@ async function packSelection(options) {
   } else {
     process.stdout.write(output);
   }
-}
-
-async function explainPack(options) {
-  const pack = loadPack(resolvePackPath(options));
-  const normalized = normalizeManifest(pack.manifest);
-  console.log(JSON.stringify(explainPackPayload(pack.dir, normalized), null, 2));
-}
-
-function explainPackPayload(dir, manifest) {
-  return {
-    name: manifest.name,
-    dir,
-    jscpid: manifest.jscpid,
-    purpose: manifest.purpose,
-    dependencies: manifest.dependsOn,
-    skills: manifest.skills.map((skill) => ({
-      id: skill.id,
-      jscpid: skill.jscpid,
-      title: skill.title,
-      summary: skill.summary,
-      ts: skill.implementations.ts,
-      rust: skill.implementations.rust,
-    })),
-  };
 }
 
 function resolvePackPath(options) {
@@ -228,8 +191,6 @@ module.exports = {
   createPack,
   updatePack,
   validatePack,
-  listPacks,
   buildOutput,
   packSelection,
-  explainPack,
 };

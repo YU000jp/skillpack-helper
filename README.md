@@ -17,7 +17,7 @@ npm i -D @yu000jp/skillpack-helper
 
 ## Use In a Repository
 
-Add scripts like these to the consuming repo:
+Add scripts like these to the consuming repo and use them as the normal workflow:
 
 ```json
 {
@@ -29,15 +29,12 @@ Add scripts like these to the consuming repo:
 }
 ```
 
-Run the CLI directly when needed:
+Run them from the consuming repo:
 
 ```bash
-npx skillpack-helper create ./packs/example --name example-pack
-npx skillpack-helper update ./packs/example
-npx skillpack-helper validate ./packs
-npx skillpack-helper build ./packs --out ./dist
-npx skillpack-helper pack ./packs --out ./bundle.json
-npx skillpack-helper explain ./packs/example
+npm run skillpack:validate
+npm run skillpack:build
+npm run skillpack:pack
 ```
 
 ## Command Reference
@@ -47,7 +44,12 @@ npx skillpack-helper explain ./packs/example
 - `validate`: check a pack or pack tree
 - `build`: write deterministic bundle output
 - `pack`: write JSON bundle output
-- `explain`: print a normalized view of a pack
+
+## Optional Direct Use
+
+```bash
+npx skillpack-helper validate ./packs
+```
 
 ## Schema
 

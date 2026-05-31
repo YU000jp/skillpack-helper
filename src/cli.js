@@ -6,9 +6,7 @@ const {
   createPack,
   updatePack,
   validatePack,
-  listPacks,
   buildOutput,
-  explainPack,
   packSelection,
 } = require("./cli/index");
 
@@ -27,21 +25,18 @@ async function main(argv = process.argv.slice(2)) {
       case "validate":
         await validatePack(parseCliArgs(args));
         break;
-      case "list":
-        await listPacks(parseCliArgs(args));
-        break;
       case "build":
         await buildOutput(parseCliArgs(args));
         break;
       case "pack":
         await packSelection(parseCliArgs(args));
         break;
-      case "explain":
-        await explainPack(parseCliArgs(args));
-        break;
       case "help":
       case "--help":
       case "-h":
+        printHelp();
+        process.exitCode = 0;
+        break;
       default:
         printHelp();
         process.exitCode = command ? 1 : 0;
@@ -56,7 +51,7 @@ async function main(argv = process.argv.slice(2)) {
 function parseCliArgs(argv) {
   const result = {
     _: [],
-    root: process.cwd(),
+    root: null,
     out: null,
     name: null,
     purpose: null,
@@ -151,10 +146,8 @@ function printHelp() {
       "  create    Scaffold a new skill pack",
       "  update    Regenerate SKILL.md from the manifest",
       "  validate  Validate one pack or a pack root",
-      "  list      List discovered packs",
       "  build     Build a bundle output",
       "  pack      Emit a selected bundle",
-      "  explain   Show pack details",
       "",
       "Options:",
       "  --root <dir>",

@@ -1,7 +1,7 @@
 {
   "name": "@yu000jp/skillpack-helper",
   "version": "0.1.0",
-  "description": "CLI tool for managing AI skill packs in downstream repositories.",
+  "description": "DevDependency CLI tool for managing AI skill packs in downstream repositories.",
   "homepage": "https://github.com/YU000jp/skillpack-helper#readme",
   "repository": {
     "type": "git",
