@@ -1,5 +1,7 @@
 # @yu000jp/skillpack-helper
 
+CLI tool for managing AI skill packs in downstream repositories.
+
 ```bash
 npm i -D @yu000jp/skillpack-helper
 ```
